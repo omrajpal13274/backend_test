@@ -9,10 +9,13 @@ const session = require("express-session");
 const { Leader, User } = require("./models/users");
 const socketIo = require("socket.io");
 const http = require("http");
+const env = require("dotenv")
+
+env.config()
 //npm i bcrypt ejs express express-session flash method-override mongoose
 
 mongoose
-  .connect("mongodb://127.0.0.1:27017/impasta")
+  .connect(process.env.MONGODB_URI)
   .then(() => {
     console.log("Connected to Mongo");
   })
@@ -42,7 +45,7 @@ const requireLogin = (req, res, next) => {
 };
 
 var number = 0;
-const port = 3000;
+const port = process.env.PORT;
 const server = http.createServer(app);
 const io = socketIo(server);
 
@@ -490,15 +493,15 @@ app.get("/", function (req, res) {
   res.send("your server is running properly on hotspot");
 });
 
-mongoose
-  .connect("mongodb://127.0.0.1:27017/impasta")
-  .then(() => {
-    console.log("Connected to Mongo");
-  })
-  .catch((err) => {
-    console.log("ERROR");
-    console.log(err);
-  });
+// mongoose
+//   .connect("mongodb://127.0.0.1:27017/impasta")
+//   .then(() => {
+//     console.log("Connected to Mongo");
+//   })
+//   .catch((err) => {
+//     console.log("ERROR");
+//     console.log(err);
+//   });
 
 const userSchema = new mongoose.Schema({
   team: {

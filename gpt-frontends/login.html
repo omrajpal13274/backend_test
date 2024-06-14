@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login Form</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f4;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+        form {
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 5px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            width: 300px;
+            text-align: center; /* Center the content */
+        }
+        input[type="email"],
+        input[type="password"] {
+            width: 100%;
+            padding: 10px;
+            margin: 5px 0;
+            border: 1px solid #ccc;
+            border-radius: 3px;
+            box-sizing: border-box;
+        }
+        input[type="submit"] {
+            width: 100%;
+            background-color: #007bff;
+            color: #fff;
+            border: none;
+            padding: 10px;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+        input[type="submit"]:hover {
+            background-color: #0056b3;
+        }
+        .error-message {
+            color: red;
+        }
+    </style>
+</head>
+<body>
+    <form action="login.php" method="post">
+        <h2>Login Form</h2>
+        <label for="email">Email Address</label>
+        <input type="email" id="email" name="email" required>
+
+        <label for="password">Password</label>
+        <input type="password" id="password" name="password" required>
+
+        <input type="submit" value="Login">
+        <p class="error-message">Wrong</p>
+    </form>
+</body>
+</html>
+\
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+const express = require('express');
+const app = express();
+const path = require('path');
+const mongoose = require('mongoose');
+const bcrypt = require('bcrypt');
+const flash = require('flash')
+const session = require('express-session')
+const { Leader, User } = require('./models/users')
+
+mongoose.connect('mongodb://127.0.0.1:27017/learning')
+    .then(() => {
+        console.log("Connected to Mongo");
+    })
+    .catch((err) => {
+        console.log("ERROR");
+        console.log(err);
+    })
+
+
+let globalId = null;
+let leaderEmail = null;
+let globalTeam = null;
+app.use(express.urlencoded({ extended: true }));
+app.use(session({ secret: "notagoodsecret" }))
+app.set('view engine', 'ejs');
+app.set('views', path.join(__dirname, '/views'))
+app.use(express.static('public'))
+
+const requireLogin = (req, res, next) => {
+    if (!req.session.user_id) {
+        return res.redirect('/login')
+    }
+    next();
+}
+
+
+app.get('/', (req, res) => {
+    res.render('main');
+})
+
+app.get('/registerLeader', (req, res) => {
+    res.render('registerLeader')
+})
+
+app.get('/login', (req, res) => {
+    res.render('login',{error:null})
+})
+
+app.post('/registerLeader', async (req, res) => {
+    const { team_name, username, email, password } = req.body;
+    const hash = await bcrypt.hash(password, 12);
+    globalTeam = team_name;
+
+    const user = new User({
+        username: username,
+        email: email,
+        password: hash,
+        isLeader: true,
+        team: team_name
+    })
+    const leader = new Leader({
+        team: team_name,
+        username: username,
+        email: email,
+        password: hash,
+        members: [],
+        isLeader: true
+    })
+
+    await leader.save();
+    await user.save();
+    res.redirect('/login')
+})
+
+app.post('/login', async (req, res) => {
+    const { email, password } = req.body;
+    const user = await User.findOne({ email });
+
+    if(!user){
+        return res.render('login', { error: 'Invalid username or password.' });
+    }
+    const validPassword = await bcrypt.compare(password, user.password)
+    if (validPassword) {
+        req.session.user_id = user._id;
+        globalId = user._id;
+        if (user.isLeader) {
+            globalTeam = user.team
+            leaderEmail = email;
+            res.redirect('/leaderDash')
+        }
+        else {
+            res.redirect('/userDash')
+        }
+    }
+    else {
+        res.render('login', { error: 'Invalid username or password.' });
+    }
+    // res.redirect("/team_dash")
+})
+
+app.post('/logout', (req, res) => {
+    req.session.user_id = null;
+    res.redirect('/login')
+})
+
+app.get('/secret', requireLogin, (req, res) => {
+    res.send("Bellloooooooo")
+})
+
+app.get('/leaderDash',requireLogin, async (req, res) => {
+    const add = await Leader.findOne({ email: leaderEmail })
+    console.log(add)
+    const memberArray = [];
+    if (add.members.length > 0) {
+        for (m of add.members) {
+            let indi = await User.findById(m)
+            memberArray.push(indi);
+        }
+    }
+    res.render("leaderDash", { members: memberArray, name: add.username, team: add.team })
+})
+
+app.get('/registerUser',requireLogin, (req, res) => {
+
+    res.render("registerUser")
+})
+
+app.post('/registerUser', async (req, res) => {
+    const { username, email, password } = req.body;
+    const hash = await bcrypt.hash(password, 12);
+
+    const user = new User({
+        username: username,
+        email: email,
+        password: hash,
+        isLeader: false,
+        team: globalTeam
+    })
+
+    await user.save();
+    const userId = await User.findOne({ username })
+    const add = await Leader.findOne({ email: leaderEmail })
+    add.members.push(userId._id)
+    await add.save();
+    res.redirect('/leaderDash')
+})
+
+app.get('/userDash',requireLogin, async (req, res) => {
+    const user = await User.findById(globalId) //Always remember async await errors
+    console.log(user)
+    res.render('userDash', { name: user.username , team: user.team});
+})
+
+app.listen(3000, () => {
+    console.log('Server Started');
+})

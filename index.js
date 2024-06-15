@@ -45,7 +45,7 @@ const requireLogin = (req, res, next) => {
 };
 
 var number = 0;
-const port = process.env.PORT;
+const port = process.env.PORT || 3000;
 const server = http.createServer(app);
 const io = socketIo(server);
 
